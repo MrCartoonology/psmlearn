@@ -8,9 +8,9 @@ import copy
 import random
 import numpy as np
 
-import h5minibatch
-assert h5minibatch.__version__=='0.0.4'
-from h5minibatch import H5BatchReader
+import h5batchreader
+assert h5batchreader.__version__=='0.0.4'
+from h5batchreader import H5BatchReader
 
 from . dataset import Dataset
 from . import dataloc
@@ -136,7 +136,7 @@ class H5BatchDataset(Dataset):
 
 
 def unpack_batchinfo(batch):
-    '''takes batch as returned by h5-mini-batch.H5BatchReader, which includes 
+    '''takes batch as returned by h5batchreader.H5BatchReader, which includes 
     data, meta, as well as batch info, and just pulls out batch info items.
     '''
     batchinfo = {'epoch':batch['epoch'],
@@ -160,7 +160,7 @@ def make_list_from_batch(batch, dset_or_dset_groups_name_list):
 def unpack_XYmeta(batch, X, 
                   Y_to_onehot, Y_onehot_num_outputs, Y,
                   meta_dset_names):
-    '''takes batch as returned by h5-mini-batch.H5BatchReader, which includes 
+    '''takes batch as returned by h5batchreader.H5BatchReader, which includes 
     dset, dset_groups, meta, as well as batch info, and returns X,Y,meta.
 
     X = list of what is in X, followed by X_dset_groups

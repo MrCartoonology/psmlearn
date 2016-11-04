@@ -8,7 +8,7 @@ import random
 
 import h5py
 
-from h5minibatch import DataSetGroup as H5DataSetGroup
+from h5batchreader import DataSetGroup as H5DataSetGroup
 
 from  . import dataloc
 from .. import util

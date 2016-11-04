@@ -6,7 +6,7 @@ import os
 import glob
 import random
 
-from h5minibatch import DataSetGroup as H5DataSetGroup
+from h5batchreader import DataSetGroup as H5DataSetGroup
 
 from  . import dataloc
 from .. import util

@@ -25,7 +25,7 @@ def _imshowImg(plt, img):
         assert np.max(plt_img)<=1.0
     else:
         plt_img = img
-    plt.imshow(plt_img, interpolation='none')
+    plt.imshow(plt_img, interpolation='none', origin='lower')
     
 def compareImages(plt, figH, title_imgA, title_imgB):
     plt.figure(figH)

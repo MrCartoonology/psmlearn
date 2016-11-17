@@ -29,7 +29,7 @@ def _addPipelineArgs(parser, outputdir):
     parser.add_argument('--dev', action='store_true',help='develop mode, for shortening datasets, load times, etc.')
     parser.add_argument('--seed', type=int, help='seed for random number generators', default=39819)
     parser.add_argument('--plot', type=int, help='plot level. default=0, no plots, 1 means detailed', default=0)
-    parser.add_argument('--log', type=str, help='one of DEBUG,INFO,WARN,ERROR,CRITICAL.', default='DEBUG')
+    parser.add_argument('--log', type=str, help='one of DEBUG,INFO,WARN,ERROR,CRITICAL.', default='INFO')
     parser.add_argument('--force', action='store_true', help='overwrite existing filenames')
     parser.add_argument('--clean', action='store_true', help='delete all output for this prefix')
     parser.add_argument('-c', '--config', type=str, help='config file for steps. a .yml file', default=None)
@@ -62,9 +62,12 @@ class Pipeline(object):
         self.name2step = {}
         self._steps_fixed = False
 
+        tf.reset_default_graph()
+
         if self.session is None:
             self.session = tf.InteractiveSession()
-            
+
+        
         self.doTrace=False
         self.doDebug=False
         self.hdr = 'Pipeline'
@@ -72,6 +75,10 @@ class Pipeline(object):
         self.parser = argparse.ArgumentParser(add_help=False)
         _addPipelineArgs(parser=self.parser, outputdir=self.outputdir)
 
+    def __del__(self):
+        if self.session is not None:
+            self.session.close()
+            
         
     def _add_step(self,
                   name,
@@ -213,17 +220,19 @@ class Pipeline(object):
         for step in self.steps:
             name = step.name
             if name not in config:
-                self.warning("validate config: step %s does not have an entry in config" % name)
+                pass
+#                self.warning("validate config: step %s does not have an entry in config" % name)
         for entry in config:
             if entry == 'init':
                 continue
             if entry not in self.steps:
-                self.warning("validate config: entry for %s does not correspond to step" % entry)
+                pass
+#                self.warning("validate config: entry for %s does not correspond to step" % entry)
 
-    def init(self):
+    def init(self, command_line=None):
         if self.config: return self.config
         self._steps_fixed=True
-        self._set_args_and_plt()
+        self._set_args_and_plt(command_line=command_line)
         msg = "init"
         if self.args.config:
             self.config = yaml.load(file(self.args.config, 'r'))
@@ -305,7 +314,7 @@ class Pipeline(object):
             setattr(nameConfig,ky,val)
         return nameConfig
 
-    def _set_args_and_plt(self):
+    def _set_args_and_plt(self, command_line=None):
         descr = "pipeline for managing sequence of analysis steps. The steps are:\n"
         for step in self.steps:
             descr += '  %s\n' % step.name
@@ -319,8 +328,10 @@ class Pipeline(object):
                                                description=descr,
                                                epilog=self.epilog,
                                                formatter_class=argparse.RawDescriptionHelpFormatter)
-
-        args = final_parser.parse_args()
+        if command_line:
+            args = final_parser.parse_args(command_line)
+        else:
+            args = final_parser.parse_args()
 
         nm2lvl = {'INFO':logging.INFO,
                   'DEBUG':logging.DEBUG}

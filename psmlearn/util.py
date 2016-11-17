@@ -77,7 +77,9 @@ def cmat2str(confusion_matrix, fmtLen=None):
     return accuracy, cmat_rows
 
 def get_best_correct_one_hot(scores, truth, label):
-    '''returns a case
+    '''looks at scores that are correct for label.
+    Returns best score, and row for that score.
+    Returns None, None if scores never predict label correctly.
     '''
     predict = np.argmax(scores, axis=1)
     truth = np.argmax(truth, axis=1)
@@ -92,15 +94,51 @@ def get_best_correct_one_hot(scores, truth, label):
     row = orig_rows[np.argmax(scores)]
     return row, best_score
 
-def replaceWithLogIfAbove(img,thresh):
+
+########### more analytical utility functions ##########
+
+def inplace_log_thresh(img,thresh):
     replace = img >= thresh
     newval = np.log(1.0 + img[replace] - thresh)
     img[replace]=thresh + newval
 
-def replicate(img, numChannels, dtype):
+def log_thresh(img,thresh):
+    img = img.astype(np.float32, copy=True)
+    inplace_log_thresh(img, thresh)
+    return img
+
+def replicate(img, num_channels, dtype):
     assert len(img.shape)==2
-    repShape = list(img.shape)+[numChannels]
+    repShape = list(img.shape)+[num_channels]
     rep = np.empty(repShape, dtype)
-    for ch in range(numChannels):
+    for ch in range(num_channels):
         rep[:,:,ch] = img[:]
     return rep
+
+def topn(arr, n):
+    '''return topn positions in array (as flat indicies)
+    and topn values
+    '''
+    inds = arr.argsort()
+    pos = list(inds[-n:])
+    vals = list(arr[pos])
+    pos.reverse()
+    vals.reverse()
+    return pos, vals
+
+def start_signal_window(img, direc, window_len):
+    assert direc in ['hproj','vproj']
+    if direc == 'vproj':
+        proj=np.mean(img, axis=0)
+    else:
+        proj = np.mean(img, axis=1)
+    cum_proj = np.cumsum(proj)
+    NN=len(cum_proj)
+    if window_len >= NN:
+        return 0
+    signal_window = cum_proj.copy()
+    signal_window[window_len:] -= cum_proj[0:NN-window_len]
+    end_max_signal = max(window_len,np.argmax(signal_window))
+    start_max_signal = end_max_signal-window_len
+    return start_max_signal
+

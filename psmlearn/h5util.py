@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 import h5py
+import sys
 
 def is_integral(dtype):
     return dtype in  [np.int, 
@@ -39,13 +40,11 @@ def read_from_h5(h5in):
         h5in = h5py.File(h5in, 'r')
     res = {}    
     for ky in h5in.keys():
+        if not isinstance(h5in[ky], h5py.Dataset): continue
         try:
             res[ky]=h5in[ky][:]
         except:
-            try:
-                res[ky]=h5in[ky].value
-            except:
-                sys.stderr.write('WARNING: h5dict - root key=%s for file=%s is not data, skipping' % (ky, h5in.filename))
+            res[ky]=h5in[ky].value
     h5in.close()
     return res
 
@@ -66,3 +65,8 @@ def pack_in_compound(arrList, nameOrder):
 
         
     
+def write_config(h5, config):
+    gr=h5.create_group('config')
+    for nm, val in config.__dict__.iteritems():
+        gr[nm]=val
+        

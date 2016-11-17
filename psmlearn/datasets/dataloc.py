@@ -6,6 +6,7 @@ import os
 
 ############ FILE LOCATION #######################
 MLEARNDIR = '/reg/d/ana01/temp/davidsch/psmlearn'
+PSMLEARN_ENV = 'PSMLEARN_BASEDIR'
 
 def getDefalutOutputDir(project, subproject='default_subproject'):
     projectpath = getProjectDir(project)
@@ -23,8 +24,10 @@ def getDefalutOutputDir(project, subproject='default_subproject'):
     
 def getProjectDir(project):
     global MLEARNDIR
-    assert os.path.exists(MLEARNDIR), "base dir for mlearning project doesn't exist: %s" % MLEANDIR
-    projectpath = os.path.join(MLEARNDIR, project)
+    global PSMLEARN_ENV
+    basedir = os.environ.get(PSMLEARN_ENV, MLEARNDIR)
+    assert os.path.exists(basedir), "base dir for mlearning project doesn't exist. Looked for: %s you can set the environment variable %s to specify a different basedir" % (MLEANDIR, PSMLEARN_ENV)
+    projectpath = os.path.join(basedir, project)
     assert os.path.exists(projectpath), "project dir doesn't exist: %s" % projectpath
     return projectpath
 

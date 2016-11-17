@@ -71,7 +71,7 @@ class XtcavVgg16(object):
     def vgg16(self):
         if self._vgg16 is None:
             vgg16_weights_file = psmlearn.dataloc.getProjectCalibFile(project='vgg16', fname='vgg16_weights.npz')
-            self._vgg16 = psmlearn.vgg16.create(session=pipeline.session,
+            self._vgg16 = psmlearn.vgg16.create(session=self.pipeline.session,
                                                 weights=vgg16_weights_file,
                                                 dev=self.dev)
         return self._vgg16
@@ -124,15 +124,7 @@ class XtcavVgg16(object):
         h5['number_samples_test'] = self.dset.num_samples_test()
         h5['num_outputs'] = num_outputs
         h5['files'] = basic_iter.get_h5files()
-
-        # get number of validation and test samples
-        basic_iter = self.dset.validation_iter(batchsize=1, epochs=1)
-        validation_num=0
-        for batch in basic_iter: validation_num+=1
-
-        basic_iter = self.dset.test_iter(batchsize=1, epochs=1)
-        test_num=0
-        for batch in basic_iter: test_num += 1
+        h5util.write_config(h5, config)
         
         pipeline.trace("compute_channel_mean: finished", checkcache=False)
 
@@ -215,10 +207,12 @@ class XtcavVgg16(object):
             h5out['meta']=all_meta
             h5out['Y'] = all_Y
             h5out['files']=batch_iter.get_h5files()
+        h5util.write_config(h5out, config)
         pipeline.trace("compute_codewords: done with all", checkcache=False)
         
     def tsne_on_vgg16_codewords(self, config, pipeline, step2h5list, output_files):
         h5=h5py.File(output_files[0],'w')
+        h5util.write_config(h5, config)
 
     def train_on_codewords(self, config, pipeline, step2h5list, output_files):
         model = self.model(pipeline, step2h5list)
@@ -317,14 +311,16 @@ class XtcavVgg16(object):
             pipeline.debug(msg='activation %5d label=%d vgg.time=%.2f' % (num_saved, label, vgg_time), checkcache=False)
 
         h5 = h5py.File(output_files[0],'w')
+        h5util.write_config(h5, config)
         h5['label']=samples_label
         h5['meta']=np.concatenate(samples_meta)
         for nm, arrList in layer_vgg16_output.iteritems():
             one_shape = arrList[0].shape
             expected_shape = tuple([len(arrList)*one_shape[0]] + list(one_shape[1:]))
             arr = np.concatenate(arrList)
+            arr_mean = np.mean(arr, axis=0)
             assert arr.shape == expected_shape, "nm=%s one_shape=%r expected=%r but concatenate shape=%r" % (nm, one_shape, expected_shape, arr.shape)
-            h5[nm]=arr
+            h5['%s_mean' % nm]=arr_mean
             
 
     def get_W(self, step2h5list):
@@ -347,13 +343,14 @@ class XtcavVgg16(object):
         fc1_W, fc1_B = self.vgg16().get_W_B('fc1')
 
         h5=h5py.File(output_files[0],'w')
+        h5util.write_config(h5, config)
 
         unique_labels = list(set(labels))
 
         for lbl in unique_labels:
             lblGroup = h5.create_group('label_%d' % lbl)
-            fc2 = layer_output['fc2'][labels==lbl]
-            fc2_act = np.mean(fc2 * W[:,lbl], axis=0)
+            fc2_mean = layer_output['fc2_mean']
+            fc2_act = fc2_mean * W[:,lbl]
             lblGroup['fc2_act_hist']=fc2_act
             pos, vals = topn(fc2_act, config.topn)
             lblGroup['fc2_topn_pos']=pos
@@ -361,8 +358,8 @@ class XtcavVgg16(object):
 
             for idx,ipos in enumerate(pos):
                 idxLblGroup = lblGroup.create_group('pos_neuron_%d' % idx)
-                fc1 = layer_output['fc1'][labels==lbl]
-                fc1_act = np.mean(fc1 * fc2_W[:,ipos] + fc2_B[ipos], axis=0)
+                fc1_mean = layer_output['fc1_mean']
+                fc1_act = fc1_mean * fc2_W[:,ipos] + fc2_B[ipos]
                 pos_ipos, vals_ipos = topn(fc1_act, config.topn)
                 idxLblGroup['fc1_act_hist'] = fc1_act
                 idxLblGroup['fc1_topn_pos'] = pos_ipos
@@ -370,11 +367,9 @@ class XtcavVgg16(object):
 
                 for jdx, jpos in enumerate(pos_ipos):
                     jdxIdxLblGroup = idxLblGroup.create_group('pos_neuron_%d' % jdx)
-                    pool5 = layer_output['pool5'][labels==lbl]
-                    N = pool5.shape[0]
-                    M = np.prod(pool5.shape[1:])
-                    pool5 = np.resize(pool5, (N,M))
-                    pool5_act = np.mean(pool5 * fc1_W[:,jpos] + fc1_B[jpos], axis=0)
+                    pool5_mean = layer_output['pool5_mean'][labels==lbl]
+                    pool5_mean = pool5_mean.flatten()
+                    pool5_act = pool5_mean * fc1_W[:,jpos] + fc1_B[jpos]
                     pos_jpos, vals_jpos = topn(pool5_act, config.topn)
                     jdxIdxLblGroup['pool5_act_hist'] = pool5_act
                     jdxIdxLblGroup['pool5_topn_pos'] = pos_jpos
@@ -394,6 +389,7 @@ class XtcavVgg16(object):
         pl_imgs = self.vgg16().imgs
         
         h5out=h5py.File(output_files[0],'w')
+        h5util.write_config(h5out, config)
 
         for lbl in range(num_outputs):
             groupName = 'label_%d' % lbl
@@ -438,15 +434,15 @@ if __name__ == '__main__':
     pipeline = Pipeline(stepImpl=stepImpl, outputdir=outputdir)
     stepImpl.add_arguments(pipeline.parser)
     pipeline.add_step_method(name='compute_channel_mean')
-    pipeline.add_step_method_plot(name='plot_vgg16_img_prep')
-    pipeline.add_step_method(name='tsne_on_img_prep')
+ #   pipeline.add_step_method_plot(name='plot_vgg16_img_prep')
+ #   pipeline.add_step_method(name='tsne_on_img_prep')
     pipeline.add_step_method(name='compute_vgg16_codewords',
                              output_files=['_train','_validation','_test'])
-    pipeline.add_step_method(name='tsne_on_vgg16_codewords')
+#   pipeline.add_step_method(name='tsne_on_vgg16_codewords')
     pipeline.add_step_method(name='train_on_codewords')
-    pipeline.add_step_method(name='vgg16_output')
-    pipeline.add_step_method(name='neurons')
-    pipeline.add_step_method(name='gbprop')
-    pipeline.add_step_method_plot(name='plot_gbprop')
+#    pipeline.add_step_method(name='vgg16_output')
+#    pipeline.add_step_method(name='neurons')
+#    pipeline.add_step_method(name='gbprop')
+#    pipeline.add_step_method_plot(name='plot_gbprop')
     pipeline.init()
     pipeline.run()

@@ -10,6 +10,7 @@ import numpy as np
 import h5py
 import tensorflow as tf
 from . import util
+from . import h5util
 
 class ClassificationTrainer(object):
     def __init__(self,
@@ -70,9 +71,11 @@ class ClassificationTrainer(object):
 
     def save(self):
         h5 = h5py.File(self.save_fname, 'w')
+        h5util.write_config(h5, self.config)
         trainGroup = h5.create_group('train')
-        trainGroup['acc']=self.best_accuracy
+        trainGroup['valdidation_accuracy']=self.best_accuracy
         trainGroup['step']=self.last_best_accuracy_step
+        trainGroup['validation_confusion_matrix']=self.valid_cmat
         modelGroup = h5.create_group('model')
         self.model.save(modelGroup, self.sess)
         h5.close()        
@@ -148,6 +151,7 @@ class ClassificationTrainer(object):
         if valid_acc > self.best_accuracy:
             self.best_accuracy = valid_acc
             self.last_best_accuracy_step = step
+            self.valid_cmat = valid_cmat
             self.save()
             better  = True
         return {'cmat':valid_cmat_rows,

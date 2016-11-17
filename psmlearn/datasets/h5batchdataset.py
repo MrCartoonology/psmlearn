@@ -9,7 +9,7 @@ import random
 import numpy as np
 
 import h5batchreader
-assert h5batchreader.__version__=='0.0.4'
+assert h5batchreader.__version__=='v1.0.0', "got version: %s" % h5batchreader.__version__
 from h5batchreader import H5BatchReader
 
 from . dataset import Dataset
@@ -18,10 +18,36 @@ from .. import util
 from .. import h5util
 
 class H5BatchDataset(Dataset):
+    '''Creates a psmlearn.Dataset interface around a set of hdf5 files in the
+    psmlearn data tree. The dataset is for machine learning.
+
+    Each hdf5 file has a collection of aligned datasets off the root group.
+    The rows of these datasets samples.  Arguments:
+
+    These arguments give the location of the files in the psmlearn tree, and describe
+    them
+
+    project
+    subproject
+    verbose
+    descr
+    name
+
+    h5files - a list of the hdf5 files for the dataset
+    X - a list of the datasets for the features.
+    X_dset_groups - a list of DataSetGropus
+                 Y=[], Y_to_onehot=[],
+                 Y_onehot_num_outputs=[],
+                 meta_dset_names=[],
+                 dev=False,
+                 add_batch_info_to_meta=True,
+                 include_if_one_mask_datasets=[],
+                 exclude_if_negone_mask_datasets=[]):
+    '''
     def __init__(self, project, subproject, verbose, descr, name,
                  h5files, X=[], X_dset_groups=[],
                  Y=[], Y_to_onehot=[],
-                 Y_onehot_num_outputs = [],
+                 Y_onehot_num_outputs=[],
                  meta_dset_names=[],
                  dev=False,
                  add_batch_info_to_meta=True,

@@ -193,13 +193,21 @@ class ImgMLearnDataset(H5BatchDataset):
         return [],[], []
 
     def get_image(self, meta, files):
-        filenum=meta['file'][0]
-        row=meta['row'][0]
+        fields_to_check=['evt.fiducials','evt.nanoseconds','evt.seconds','run','run.index']
+        if len(meta.shape)==0:
+            filenum=meta['file']
+            row=meta['row']
+            check = [meta[field] for field in fields_to_check]
+        else:
+            assert len(meta.shape)==1 and meta.shape[0]==1, "more than one meta record"
+            filenum=meta['file'][0]
+            row=meta['row'][0]
+            check = [meta[field][0] for field in fields_to_check]
         filename=files[filenum]
         h5=h5py.File(filename,'r')
-        for nm in ['evt.fiducials','evt.nanoseconds','evt.seconds','run','run.index']:
-            assert h5[nm][row]==meta[nm][0], "get_image: filenum=%d row=%d filename=%s: meta[%s]=%s != h5[%s][%d]=%s. meta=%r" % \
-            (filenum, row, filename, nm, meta[nm][0], nm, row, h5[nm][row], meta)
+        for nm, expected in zip(fields_to_check, check):
+            assert h5[nm][row]==expected, "get_image: filenum=%d row=%d filename=%s: meta[%s]=%s != h5[%s][%d]=%s. meta=%r" % \
+            (filenum, row, filename, nm, check, nm, row, h5[nm][row], meta)
         return h5['xtcavimg'][row,:]
         
     def getH5files(self, subprojectDir, predict, Y, dev):

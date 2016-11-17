@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+__version__='v0.1.0'
+
 from . import boxutil
 from . visualize import make_grid
 from . import vgg16
@@ -17,3 +19,4 @@ from . pipeline import *
 from . tsne import tsne
 from . datasets import get_dataset
 from . datasets import dataloc
+from . xvalidate import XValidate

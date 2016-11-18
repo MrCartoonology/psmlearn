@@ -52,7 +52,6 @@ class Step(object):
         '''a step is called with a signature depending on how it was added. For instance:
         '''
         kwargs = {}
-
         data_iter = None
         if self.what_data_gen == 'NO_DATA_GEN':
             pass
@@ -99,4 +98,3 @@ class Step(object):
                     sys.stderr.write("WARNING: step: %s failed, deleting output file: %s\n" % (self, fname))
                     os.unlink(fname)
             raise exp
-    

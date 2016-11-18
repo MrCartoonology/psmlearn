@@ -2,9 +2,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
 import numpy as np
 import h5py
-import tensorflow as tf
+if os.environ.get('MOCK_TENSORFLOW',False):
+    import psmlearn.mock_tensorflow as tf
+else:
+    import tensorflow as tf
 
 class Model(object):
     def __init__(self, **kwargs):
@@ -22,9 +26,9 @@ class Model(object):
 def dense_layer_ops(X, num_X, num_Y, config):
     W = tf.Variable(tf.truncated_normal([num_X, num_Y],
                                         mean=0.0,
-                                        stddev=config.var_init_stddev),
+                                        stddev=np.float32(config.var_init_stddev)),
                     name='W')
-    B = tf.Variable(tf.constant(value=config.bias_init,
+    B = tf.Variable(tf.constant(value=np.float32(config.bias_init),
                                 dtype=tf.float32,
                                 shape=[num_Y]),
                     name='B')
@@ -34,16 +38,18 @@ def dense_layer_ops(X, num_X, num_Y, config):
 
 def get_reg_term(config, vars_to_reg):
     reg_term = tf.constant(value=0.0, dtype=tf.float32)
-    if (config.l2reg>0.0 or config.l1reg>0.0) and len(vars_to_reg)>0:
+    l2reg = np.float32(config.l2reg)
+    l1reg = np.float32(config.l1reg)
+    if (l2reg>0.0 or l1reg>0.0) and len(vars_to_reg)>0:
         for x_var in vars_to_reg:
-            if config.l2reg>0.0:
+            if l2reg>0.0:
                 x_squared = x_var * x_var
                 l2norm = tf.reduce_sum(x_squared)
-                reg_term += config.l2reg * l2norm
-            if config.l1reg>0.0:
+                reg_term += l2reg * l2norm
+            if l1reg>0.0:
                 x_abs = tf.abs(x_var)
                 l1norm = tf.reduce_sum(x_abs)
-                reg_term += config.l1reg * l1norm
+                reg_term += l1reg * l1norm
     return reg_term
 
 def cross_entropy_loss_ops(logits, labels, config, vars_to_reg):

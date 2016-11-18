@@ -2,9 +2,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-from tensorflow.python.framework import ops
-from tensorflow.python.ops import gen_nn_ops
+import os
+if os.environ.get('MOCK_TENSORFLOW',False):
+    import psmlearn.mock_tensorflow as tf
+    from psmlearn.mock_tensorflow import ops
+    from psmlearn.mock_tensorflow import gen_nn_ops
+else:
+    import tensorflow as tf
+    from tensorflow.python.framework import ops
+    from tensorflow.python.ops import gen_nn_ops
 
 # http://stackoverflow.com/questions/38340791/guided-back-propagation-in-tensor-flow
 def guided_backprop_op(fn, relus, X):

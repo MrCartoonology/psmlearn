@@ -5,10 +5,15 @@ from __future__ import print_function
 import os
 
 ############ FILE LOCATION #######################
-MLEARNDIR = '/reg/d/ana01/temp/davidsch/psmlearn'
+_MLEARNDIR = '/reg/d/ana01/temp/davidsch/psmlearn'
 PSMLEARN_ENV = 'PSMLEARN_BASEDIR'
 
 def getDefalutOutputDir(project, subproject='default_subproject'):
+    '''get the default output directory for a subproject.
+    Subprojects have a scratch subdirectory. In there a directory with the 
+    username is made. This is the default output dir. Ie, 
+    psmlearn/xtcav/subproject/scratch/davidsch
+    '''
     projectpath = getProjectDir(project)
     subprojectpath = os.path.join(projectpath, subproject)
     assert os.path.exists(subprojectpath), "subproject dir doesn't exist: %s" % subprojectpath
@@ -23,21 +28,28 @@ def getDefalutOutputDir(project, subproject='default_subproject'):
     return userScratch
     
 def getProjectDir(project):
-    global MLEARNDIR
+    '''get project directory, for example, if project=xtcav
+    psmlearn/xtcav
+    '''
+    global _MLEARNDIR
     global PSMLEARN_ENV
-    basedir = os.environ.get(PSMLEARN_ENV, MLEARNDIR)
-    assert os.path.exists(basedir), "base dir for mlearning project doesn't exist. Looked for: %s you can set the environment variable %s to specify a different basedir" % (MLEANDIR, PSMLEARN_ENV)
+    basedir = os.environ.get(PSMLEARN_ENV, _MLEARNDIR)
+    assert os.path.exists(basedir), "base dir for mlearning project doesn't exist. Looked for: %s you can set the environment variable %s to specify a different basedir" % (basedir, PSMLEARN_ENV)
     projectpath = os.path.join(basedir, project)
     assert os.path.exists(projectpath), "project dir doesn't exist: %s" % projectpath
     return projectpath
 
 def getSubProjectDir(project, subproject):
+    '''get subproject directory
+    '''
     projectpath = getProjectDir(project)
     subprojectpath = os.path.join(projectpath, subproject)
     assert os.path.exists(subprojectpath), "subproject dir doesn't exist: %s" % subprojectpath
     return subprojectpath
 
 def getProjectFile(project, fname):
+    '''return path to a file or directory under a project.
+    '''
     projectDir = getProjectDir(projectdir)
     fullfname = os.path.join(projectDir, fname)
     assert os.path.exists(fullfname), "File: %s not found" % fullfname

@@ -8,7 +8,10 @@ import time
 import math
 import numpy as np
 import h5py
-import tensorflow as tf
+if os.environ.get('MOCK_TENSORFLOW',False):
+    import psmlearn.mock_tensorflow as tf
+else:
+    import tensorflow as tf
 from . import util
 from . import h5util
 
@@ -48,10 +51,10 @@ class ClassificationTrainer(object):
     def add_optimizer(self):
         self.global_step = tf.Variable(0, trainable=False)
         if self.config.decay_learning_rate:
-            self.learning_rate = tf.train.exponential_decay(learning_rate=self.config.learning_rate,
+            self.learning_rate = tf.train.exponential_decay(learning_rate=np.float32(self.config.learning_rate),
                                                             global_step=self.global_step,
                                                             decay_steps=self.config.learning_rate_decay_steps,
-                                                            decay_rate=self.config.learning_rate_decay_rate,
+                                                            decay_rate=np.float32(self.config.learning_rate_decay_rate),
                                                             staircase=self.config.learning_rate_decay_staircase)
         else:
             self.learning_rate = config.learning_rate

@@ -3,15 +3,18 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import sys
 import glob
 import random
 
+import numpy as np
 import h5py
 
 from h5batchreader import DataSetGroup as H5DataSetGroup
 
 from  . import dataloc
 from .. import util
+from .. import h5util
 from . h5batchdataset import H5BatchDataset
 from . dataset import Dataset
 
@@ -103,7 +106,7 @@ def getXtcMetaInH5():
 class ImgMLearnDataset(H5BatchDataset):
     def __init__(self, 
                  project='xtcav', 
-                 subproject='amo86815_small',
+                 subproject='amo86815_full',
                  verbose=True,
                  X='---',
                  Y='---',
@@ -112,7 +115,7 @@ class ImgMLearnDataset(H5BatchDataset):
 
         name="ImgMLearnDataset(project=%s subproject=%s, X=%s, Y=%s, predict=%s)" % \
             (project, subproject, X, Y, predict)
-
+        self.verbose=verbose
         if verbose:
             print(name)
 
@@ -134,11 +137,14 @@ class ImgMLearnDataset(H5BatchDataset):
         meta_dset_names = getXtcMetaInH5()
         subprojectDir = dataloc.getSubProjectDir(project=project, subproject=subproject)
         h5files = self.getH5files(subprojectDir, predict, Y, dev)
+        self.h5files = h5files
         h5br_X = ['xtcavimg']
         h5br_X_dset_groups, include_if_one_mask_datasets = self.get_X_dset_groups_and_include(X, predict)
         h5br_Y_to_onehot, hbr_Y_onehot_num_outputs, exclude_if_negone_mask_datasets = self.get_Y_onehot_and_exclude(Y)
         h5br_Y = self.get_Y(Y)
 
+        self.calib = {}
+        
         H5BatchDataset.__init__(self, project=project, 
                                 subproject=subproject, 
                                 verbose=verbose, 
@@ -192,7 +198,7 @@ class ImgMLearnDataset(H5BatchDataset):
             return ['lasing'],[numOutputs], []
         return [],[], []
 
-    def get_image(self, meta, files):
+    def get_image(self, meta, files, crop=False, crop_xaxis=False, crop_yaxis=False):
         fields_to_check=['evt.fiducials','evt.nanoseconds','evt.seconds','run','run.index']
         if len(meta.shape)==0:
             filenum=meta['file']
@@ -208,8 +214,23 @@ class ImgMLearnDataset(H5BatchDataset):
         for nm, expected in zip(fields_to_check, check):
             assert h5[nm][row]==expected, "get_image: filenum=%d row=%d filename=%s: meta[%s]=%s != h5[%s][%d]=%s. meta=%r" % \
             (filenum, row, filename, nm, check, nm, row, h5[nm][row], meta)
-        return h5['xtcavimg'][row,:]
-        
+        img = h5['xtcavimg'][row,:]
+        if crop:
+            if 'center_xtcavimg' not in self.calib:
+                self.calib['center_xtcavimg'] = self.load_center_calib()
+            cropInfo=self.calib['center_xtcavimg'][os.path.basename(filename)]
+            x0,x1,y0,y1=cropInfo['center'][row]
+            assert meta['evt.fiducials'][0] == cropInfo['evt.fiducials'][row]
+            if crop_xaxis:
+                img = img[:,x0:x1]
+            if crop_yaxis:
+                img = img[y0:y1,:]
+        return img
+    
+    def getCropInfo():
+        if self.cropInfo is None:
+            self.cropInfo = self.load_center_calib
+
     def getH5files(self, subprojectDir, predict, Y, dev):
         runs = [70,71]
         globmatch = 'amo86815_mlearn-r%3.3d-c*.h5'
@@ -220,6 +241,7 @@ class ImgMLearnDataset(H5BatchDataset):
             runs=[72,73]
         hdf5 = os.path.join(subprojectDir, 'hdf5')
         assert os.path.exists(hdf5), "dir %s doesn't exist" % hdf5
+        shm_hdf5 = os.path.join(subprojectDir, 'shm_hdf5')
 
         h5files = []
         for run in runs:
@@ -234,6 +256,59 @@ class ImgMLearnDataset(H5BatchDataset):
             else:
                 h5files = [os.path.join(hdf5, 'amo86815_mlearn-r071-c0000.h5')]
 
+        if os.path.exists(shm_hdf5):
+            keep_from_disk = []
+            replace_from_shm = []
+            for fname in h5files:
+                shm_fname = os.path.join(shm_hdf5, fname)
+                if os.path.exists(shm_fname):
+                    replace_from_shm.append(shm_fname)
+                else:
+                    keep_from_disk.append(fname)
+            if self.verbose:
+                sys.stdout.write("xtcav dataset: replacing %d files with counterpart in shm, keeping %d" % (len(replace_from_shm), len(keep_from_disk)))
+            h5files = keep_from_disk + replace_from_shm
+        else:
+            if verbose:
+                sys.stdout.write("xtcav dataset: shm_hdf5 link doesn't exist")
         return h5files
         
-
+    def load_center_calib(self):
+        calibDir = os.path.join(self.subProjectDir, 'calib')
+        assert os.path.exists(calibDir), "path %s doesn't exist" % calibDir
+        centerDir = os.path.join(calibDir, 'center_xtcavimg')
+        assert os.path.exists(centerDir), "path %s doesn't exist, psmlearn-exeamples xtcav_center script generates output" % centerDir
+        h5files = [os.path.basename(h5) for h5 in self.h5files]
+        cropInfo = {}
+        print("loading center calib")
+        for basename in h5files:
+            fname = os.path.join(centerDir, 'center_' + basename)
+            assert os.path.exists(fname), "fname=%s doesn't exist" % fname
+            h5=h5py.File(fname,'r')
+            val = h5util.read_from_h5(h5)
+            cropInfo[basename]=val
+        return cropInfo
+    
+    def crop(self, imgs, meta, h5files, xaxis=False, yaxis=False):
+        if 'center_xtcavimg' not in self.calib:
+            self.calib['center_xtcavimg'] = self.load_center_calib()
+        cropped = None
+        for idx, fnum, row, fiducials in zip(range(len(imgs)), meta['file'], meta['row'], meta['evt.fiducials']):
+            fname = os.path.basename(h5files[fnum])
+            center_info = self.calib['center_xtcavimg'][fname]['center'][row]
+            center_fiducials = self.calib['center_xtcavimg'][fname]['evt.fiducials'][row]
+            assert fiducials == center_fiducials
+            x0,x1,y0,y1 = center_info
+            img = imgs[idx]
+            
+            if xaxis:
+                img = img[:,x0:x1]
+            if yaxis:
+                img = img[y0:y1,:]
+            if cropped is None:
+                shape = (imgs.shape[0], img.shape[0], img.shape[1])
+                cropped = np.empty(shape=shape, dtype=img.dtype)
+            cropped[idx]=img
+        assert cropped is not None
+        return cropped
+    

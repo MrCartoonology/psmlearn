@@ -16,7 +16,10 @@ from __future__ import print_function
 
 import os
 import sys
-import tensorflow as tf
+if os.environ.get('MOCK_TENSORFLOW',False):
+    import psmlearn.mock_tensorflow as tf
+else:
+    import tensorflow as tf
 import numpy as np
 from scipy.misc import imresize
 import h5py

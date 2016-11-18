@@ -5,13 +5,17 @@ from __future__ import print_function
 import os
 import sys
 import copy
+import time
 import argparse
 import numpy as np
 import h5py
-import tensorflow as tf
+if os.environ.get('MOCK_TENSORFLOW',False):
+    import psmlearn.mock_tensorflow as tf
+else:
+    import tensorflow as tf
 import logging
 import yaml
-
+from mpi4py import MPI
 import psmlearn.util as util
 import psmlearn.h5util as h5util
 
@@ -27,7 +31,8 @@ def _addPipelineArgs(parser, outputdir):
     parser.add_argument('--redoall', action='store_true', help='redo all steps', default=False)
     parser.add_argument('--outputdir', type=str, help='output directory default=%s' % outputdir, default=outputdir)
     parser.add_argument('--dev', action='store_true',help='develop mode, for shortening datasets, load times, etc.')
-    parser.add_argument('--seed', type=int, help='seed for random number generators', default=39819)
+    parser.add_argument('--split_seed', type=int, help='seed for dataset random number generators - keep fixed over hyper parameter search', default=39819)
+    parser.add_argument('--job_seed', type=int, help='seed for per job random values', default=19123)
     parser.add_argument('--plot', type=int, help='plot level. default=0, no plots, 1 means detailed', default=0)
     parser.add_argument('--log', type=str, help='one of DEBUG,INFO,WARN,ERROR,CRITICAL.', default='INFO')
     parser.add_argument('--force', action='store_true', help='overwrite existing filenames')
@@ -54,15 +59,18 @@ class Pipeline(object):
         self.epilog=epilog
         self.session = session
         self.plt = plt
+        if comm is None: comm = MPI.COMM_WORLD
         self.comm = comm
-
+        self.rank = comm.Get_rank()
+        self.world_size = comm.Get_size()
+        
         self.args = None
         self.config = None
         self.steps = []
         self.name2step = {}
         self._steps_fixed = False
 
-        tf.reset_default_graph()
+#        tf.reset_default_graph()
 
         if self.session is None:
             self.session = tf.InteractiveSession()
@@ -71,13 +79,15 @@ class Pipeline(object):
         self.doTrace=False
         self.doDebug=False
         self.hdr = 'Pipeline'
-
+        if self.world_size > 1:
+            self.hdr += ':rnk=%2.2d' % self.rank
         self.parser = argparse.ArgumentParser(add_help=False)
         _addPipelineArgs(parser=self.parser, outputdir=self.outputdir)
 
     def __del__(self):
-        if self.session is not None:
-            self.session.close()
+        pass
+#        if self.session is not None:
+#            self.session.close()
             
         
     def _add_step(self,
@@ -167,7 +177,7 @@ class Pipeline(object):
                        data_gen=None,
                        data_gen_params=None)
 
-    def trace(self, msg, checkcache=True):
+    def trace(self, msg, checkcache=True):        
         util.logTrace(hdr=self.hdr, msg=msg, checkcache=checkcache, flag=self.doTrace)
 
     def warning(self, msg):
@@ -246,8 +256,8 @@ class Pipeline(object):
             config = self.get_config(name='init')
             self.stepImpl.init(config=config, pipeline=self)
 
-    def run(self):
-        config = self.init()
+    def run(self, command_line=None):
+        config = self.init(command_line)
         if self.args.clean:
             return self.doClean()
         
@@ -277,10 +287,13 @@ class Pipeline(object):
         else:
             if any_output_exists and not self.args.force:
                 raise Exception("Some of the output files: %s already exist, use --force to overwrite" % step)
-            self.trace("running step=%s" % step)
+            self.trace("running step=%s" % step.name)
+            t0 = time.time()
             step.run(step2h5list, output_files)
+            step_time = time.time()-t0
             for fname in output_files:
-                assert os.path.exists(fname), "step=%s did not create output file: %s" % (step, fname)
+                assert os.path.exists(fname), "step=%s did not create output file: %s" % (step.name, fname)
+            self.trace("step=%s output[0]=%s time=%.2f" % (step.name, os.path.basename(output_files[0]), step_time))
 
     def stop_plots(self):
         self.plt.pause(.1)

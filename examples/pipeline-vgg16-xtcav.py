@@ -352,7 +352,7 @@ class XtcavVgg16(object):
             fc2_mean = layer_output['fc2_mean']
             fc2_act = fc2_mean * W[:,lbl]
             lblGroup['fc2_act_hist']=fc2_act
-            pos, vals = topn(fc2_act, config.topn)
+            pos, vals = psmlearn.util.topn(fc2_act, config.topn)
             lblGroup['fc2_topn_pos']=pos
             lblGroup['fc2_topn_vals']=vals
 
@@ -360,7 +360,7 @@ class XtcavVgg16(object):
                 idxLblGroup = lblGroup.create_group('pos_neuron_%d' % idx)
                 fc1_mean = layer_output['fc1_mean']
                 fc1_act = fc1_mean * fc2_W[:,ipos] + fc2_B[ipos]
-                pos_ipos, vals_ipos = topn(fc1_act, config.topn)
+                pos_ipos, vals_ipos = psmlearn.util.topn(fc1_act, config.topn)
                 idxLblGroup['fc1_act_hist'] = fc1_act
                 idxLblGroup['fc1_topn_pos'] = pos_ipos
                 idxLblGroup['fc1_topn_vals'] = vals_ipos
@@ -370,7 +370,7 @@ class XtcavVgg16(object):
                     pool5_mean = layer_output['pool5_mean'][labels==lbl]
                     pool5_mean = pool5_mean.flatten()
                     pool5_act = pool5_mean * fc1_W[:,jpos] + fc1_B[jpos]
-                    pos_jpos, vals_jpos = topn(pool5_act, config.topn)
+                    pos_jpos, vals_jpos = psmlearn.util.topn(pool5_act, config.topn)
                     jdxIdxLblGroup['pool5_act_hist'] = pool5_act
                     jdxIdxLblGroup['pool5_topn_pos'] = pos_jpos
                     jdxIdxLblGroup['pool5_topn_vals'] = vals_jpos

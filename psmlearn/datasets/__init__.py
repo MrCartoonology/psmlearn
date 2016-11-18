@@ -20,9 +20,9 @@ DATASETS={('xtcav','amo86815_small'):ImgMLearnDataset,
 ######## interface
 def get_dataset(project, **kwargs):
     '''Return an object to work with the data for a project/subproject.
-    The projects are the subdirectories to %s, and the 
+    The projects are the subdirectories to psmlearn directory, and the 
     subprojects are the subdirectories to the project directories.
-    ''' % dataloc.MLEARNDIR
+    ''' 
 
     projectDir = dataloc.getProjectDir(project)
     verbose = kwargs.pop('verbose',False)

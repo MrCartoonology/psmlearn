@@ -7,7 +7,6 @@ import sys
 import copy
 import inspect
 import traceback
-import psmlearn.util as util
 
 # define different kinds of data generators.
 WHAT_DATA_GEN=['NO_DATA_GEN',  # there won't be one
@@ -81,7 +80,6 @@ class Step(object):
 
         kwargs['step2h5list'] = step2h5list
 
-        util.logDebug(hdr='Step.run', msg='running: %s - kwargs=%s' % (self, kwargs))
         argspec = inspect.getargspec(self.fn_or_method)
         args = copy.deepcopy(argspec[0])
         for nm in kwargs.keys():

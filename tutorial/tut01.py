@@ -9,6 +9,7 @@ import random
 import tensorflow as tf
 import psmlearn
 from psmlearn.pipeline import Pipeline
+import psmlearn.relprop as rp
 
 __doc__ = '''
 A typical analysis may involve several steps, such as
@@ -41,7 +42,7 @@ def prep_imgs(imgs, logthresh=200.0, expanddims=3):
         imgs = np.expand_dims(imgs, axis=expanddims)
     return imgs
 
-def make_logits(X, num_outputs):
+def make_logits(X, num_outputs, relprop_rule, R_pl):
     relus = []
     
     ## layer 1 
@@ -81,10 +82,54 @@ def make_logits(X, num_outputs):
     bias04 = tf.Variable(tf.constant(value=0.0, dtype=tf.float32, shape=[num_outputs]))
     logits =  tf.nn.xw_plus_b(nonlinear03, weights04, bias04)
 
-    return logits, relus
+    ## make the relevance propagation op
+    R_l3 = rp.relprop_from_fully_connected(X=nonlinear03[0],
+                                           W=weights04,
+                                           R=R_pl,
+                                           rule=relprop_rule,
+                                           name='R_l3')
+
+    R_l2 = rp.relprop_from_fully_connected(X=input_to_layer03[0],
+                                           W=weights03,
+                                           R=R_l3,
+                                           rule=relprop_rule,
+                                           name='R_l2')
+
+    R_l2_pool = tf.reshape(R_l2, (1, 21, 17, 8), name='R_l2_pool')
+
+    R_l2_conv = rp.relprop_from_max(max_input=nonlinear02,
+                                    max_output=pool02,
+                                    R=R_l2_pool,
+                                    name='R_l2_conv')
+
+    R_l1_pool = rp.relprop_from_conv(X=pool01,
+                                     Y=conv02,
+                                     R=R_l2_conv,
+                                     rule=relprop_rule,
+                                     K=kern02,
+                                     strides=[1,1,1,1],
+                                     padding='SAME',
+                                     name='R_l1_pool')
+
+    R_l1_pool = tf.expand_dims(R_l1_pool, 0)
+    R_l1_conv = rp.relprop_from_max(max_input=nonlinear01,
+                                    max_output=pool01,
+                                    R=R_l1_pool,
+                                    name='R_l1_conv')
+
+    R_img = rp.relprop_from_conv(X=X,
+                                 Y=conv01,
+                                 R=R_l1_conv,
+                                 rule=relprop_rule,
+                                 K=kern01,
+                                 strides=[1,1,1,1],
+                                 padding='SAME',
+                                 name='R_img')
+    
+    return logits, relus, R_img
 
 
-def make_ops(X,Y, learning_rate=0.01, learning_decay_rate=.99, momentum=0.85):
+def make_ops(X, Y, relprop_rule, R_pl, learning_rate=0.01, learning_decay_rate=.99, momentum=0.85):
     '''returns tensorflow ops for a CNN model F, such that F(X)=Y.
     F will be have 2-3 convolutaional layers and two dense layers.
     ops returned will be:
@@ -95,7 +140,7 @@ def make_ops(X,Y, learning_rate=0.01, learning_decay_rate=.99, momentum=0.85):
     logits can be used to evalute the model.
     '''
     num_outputs = int(Y.get_shape()[1])
-    logits, relus = make_logits(X, num_outputs)
+    logits, relus, relprop_op = make_logits(X, num_outputs, relprop_rule, R_pl)
 
     ## loss 
     cross_entropy_loss_all = tf.nn.softmax_cross_entropy_with_logits(logits, Y)
@@ -113,7 +158,7 @@ def make_ops(X,Y, learning_rate=0.01, learning_decay_rate=.99, momentum=0.85):
     optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate, momentum=momentum)
     train_op = optimizer.minimize(cross_entropy_loss, global_step=global_step)
 
-    return logits, relus, cross_entropy_loss, train_op
+    return logits, relus, cross_entropy_loss, train_op, relprop_op
 
 def get_validation_confusion_matrix(valid_iter, logthresh, sess, logits, imgs_pl):
     cmat = None
@@ -176,11 +221,16 @@ class MySteps(object):
 
         self.imgs_pl = tf.placeholder(tf.float32, (None, 726, 568, 1))
         self.labels_pl = tf.placeholder(tf.int32, (None, 4))
-
-        self.logits, self.relus, self.loss, self.train_op = make_ops(self.imgs_pl, self.labels_pl,
-                                                                     learning_rate=learning_rate,
-                                                                     learning_decay_rate=learning_decay_rate,
-                                                                     momentum=momentum)
+        self.logits_pl = tf.placeholder(dtype=tf.float32, shape=(None,4))  # for gbprop
+        self.R_pl = tf.placeholder(dtype=tf.float32, shape=(4,)) # for relprop
+        
+        self.logits, self.relus, self.loss, \
+            self.train_op, self.relprop_op = make_ops(self.imgs_pl, self.labels_pl,
+                                                      relprop_rule=rp.EpsVariant(1e-6),
+                                                      R_pl=self.R_pl,
+                                                      learning_rate=learning_rate,
+                                                      learning_decay_rate=learning_decay_rate,
+                                                      momentum=momentum)
 
         init = tf.initialize_all_variables()
         self.saver = tf.train.Saver()

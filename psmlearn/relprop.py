@@ -208,7 +208,7 @@ def relprop_from_max(max_input, max_output, R, name=''):
     assert max_input.get_shape()[0].value == None, "expect batch ops"
     assert max_output.get_shape()[0].value == None, "expect batch ops"
 #    assert max_output.get_shape()[1:]==R.get_shape(), "max_output.shape=%r != R.shape=%r" % (max_output.get_shape()[1:], R.get_shape())
-    assert R.get_shape()[0]==1
+    assert R.get_shape()[0]==1, "expected R[0]==1, but R=%s" % R
     res = tf.gradients(max_output, max_input, R)[0][0]
     print("nm=%s relprop_from_max(%s,%s,%s)=%s" % (name, max_output.get_shape(), max_input.get_shape(), R.get_shape(), res.get_shape()))
     return res

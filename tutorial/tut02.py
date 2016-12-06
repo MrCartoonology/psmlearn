@@ -27,7 +27,6 @@ class NewSteps(tut01.MySteps):
         
     def init(self, config, pipeline):
         tut01.MySteps.init(self, config, pipeline)
-        self.logits_pl = tf.placeholder(dtype=tf.float32, shape=(None,4))
         self.saliency_op = tf.gradients(ys=self.logits, xs=self.imgs_pl, grad_ys=self.logits_pl)[0]
         self.gbprop_op = psmlearn.saliencymaps.gbprop_op(self.relus,
                                                          self.imgs_pl,
@@ -75,19 +74,27 @@ class NewSteps(tut01.MySteps):
                                                          self.logits_pl:onehot_batch_label.astype(np.float32)})
             gbprop = sess.run(self.gbprop_op, feed_dict={self.imgs_pl:prep_batch,
                                                          self.logits_pl:onehot_batch_label.astype(np.float32)})
+            rprop = sess.run(self.relprop_op, feed_dict={self.imgs_pl:prep_batch,
+                                                         self.R_pl:onehot_batch_label[0].astype(np.float32)})
+            print(rprop.shape)
+            print(rprop.flatten()[0:3])
+            
             plt.clf()
-            plt.subplot(1,3,1)
+            plt.subplot(1,4,1)
             plt.title("dimgs")
             plt.imshow(dimg[0,:,:,0], interpolation='none', origin='lower')
 
-            plt.subplot(1,3,2)
+            plt.subplot(1,4,2)
             plt.title("label=%d scores %s" % (predicted, scores_str))
             plt.imshow(prep_batch[0,:,:,0], interpolation='none', origin='lower')
 
-            plt.subplot(1,3,3)
+            plt.subplot(1,4,3)
             plt.title("gbprop")
             plt.imshow(gbprop[0,:,:,0], interpolation='none', origin='lower')
 
+            plt.subplot(1,4,4)
+            plt.title("relprop")
+            plt.imshow(rprop[:,:,0], interpolation='none', origin='lower')
             if pipeline.stop_plots(): break
             
 if __name__ == '__main__':

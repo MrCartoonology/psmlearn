@@ -28,12 +28,16 @@ def hcat_load(h5, dsets, include):
     return X[selIdx,:]                
 
 def write_to_h5(output_file, datadict):
-    '''writes a dict, and a list of dicts into a 'meta' group
-    '''
-    h5 = h5py.File(output_file,'w')
+    need_to_close=False
+    if isinstance(output_file, h5py.File):
+        h5 = output_file
+    else:
+        h5 = h5py.File(output_file,'w')
+        need_to_close=True
     for ky, val in datadict.iteritems():
         h5[ky]=val
-    h5.close()
+    if need_to_close:
+        h5.close()
 
 def read_from_h5(h5in):
     if not isinstance(h5in, h5py.File):
@@ -68,5 +72,7 @@ def pack_in_compound(arrList, nameOrder):
 def write_config(h5, config):
     gr=h5.create_group('config')
     for nm, val in config.__dict__.iteritems():
-        gr[nm]=val
-        
+        try:
+            gr[nm]=val
+        except:
+            gr[nm]=str(val)

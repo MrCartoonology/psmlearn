@@ -26,15 +26,19 @@ def getDefalutOutputDir(project, subproject='default_subproject'):
         os.mkdir(userScratch)
         print("getDefaultOutputDir: created dir: %s" % userScratch)
     return userScratch
-    
-def getProjectDir(project):
-    '''get project directory, for example, if project=xtcav
-    psmlearn/xtcav
-    '''
+
+def getBaseDir():
     global _MLEARNDIR
     global PSMLEARN_ENV
     basedir = os.environ.get(PSMLEARN_ENV, _MLEARNDIR)
     assert os.path.exists(basedir), "base dir for mlearning project doesn't exist. Looked for: %s you can set the environment variable %s to specify a different basedir" % (basedir, PSMLEARN_ENV)
+    return basedir
+
+def getProjectDir(project):
+    '''get project directory, for example, if project=xtcav
+    psmlearn/xtcav
+    '''
+    basedir = getBaseDir()
     projectpath = os.path.join(basedir, project)
     assert os.path.exists(projectpath), "project dir doesn't exist: %s" % projectpath
     return projectpath

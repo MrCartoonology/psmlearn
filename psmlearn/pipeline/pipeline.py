@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import os
 import sys
+import random
 import copy
 import time
 import argparse
@@ -33,10 +34,12 @@ def _addPipelineArgs(parser, outputdir):
     parser.add_argument('--dev', action='store_true',help='develop mode, for shortening datasets, load times, etc.')
     parser.add_argument('--split_seed', type=int, help='seed for dataset random number generators - keep fixed over hyper parameter search', default=39819)
     parser.add_argument('--job_seed', type=int, help='seed for per job random values', default=19123)
-    parser.add_argument('--plot', type=int, help='plot level. default=0, no plots, 1 means detailed', default=0)
+    parser.add_argument('--plot', type=int, help='set to 1 or greater to have plot step functions called, they will get this arg', default=0)
     parser.add_argument('--log', type=str, help='one of DEBUG,INFO,WARN,ERROR,CRITICAL.', default='INFO')
     parser.add_argument('--force', action='store_true', help='overwrite existing filenames')
     parser.add_argument('--clean', action='store_true', help='delete all output for this prefix')
+    parser.add_argument('--gpu', type=int, help='limit to one gpu on a multi-device system', default=0)
+    parser.add_argument('--cores', type=int, help='cores for tensorflow inter/intra ops', default=0)
     parser.add_argument('-c', '--config', type=str, help='config file for steps. a .yml file', default=None)
 
     
@@ -65,16 +68,12 @@ class Pipeline(object):
         self.world_size = comm.Get_size()
         
         self.args = None
-        self.config = None
+        self.all_step_config = None
         self.steps = []
         self.name2step = {}
         self._steps_fixed = False
 
 #        tf.reset_default_graph()
-
-        if self.session is None:
-            self.session = tf.InteractiveSession()
-
         
         self.doTrace=False
         self.doDebug=False
@@ -104,7 +103,7 @@ class Pipeline(object):
         if what_data_gen == 'NO_DATA_GEN':
             assert not data_gen
             assert not data_gen_params
-        assert not self._steps_fixed, "steps are fixed, run() must have been called, can't add step %s" % name
+        assert not self.initialized, "pipeline has already been initialized, steps are fixed. can't add step %s" % name
 
         if what_data_gen in ['RAW_DATA_GEN', 'STEP_DATA_GEN']:
             if not data_gen:
@@ -239,30 +238,65 @@ class Pipeline(object):
                 pass
 #                self.warning("validate config: entry for %s does not correspond to step" % entry)
 
-    def init(self, command_line=None):
-        if self.config: return self.config
-        self._steps_fixed=True
+    def _read_configfile(self, command_line):
         self._set_args_and_plt(command_line=command_line)
         msg = "init"
+        all_step_config = None
         if self.args.config:
-            self.config = yaml.load(file(self.args.config, 'r'))
-            self.validateConfig(self.config)
+            all_step_config = yaml.load(file(self.args.config, 'r'))
+            self.validateConfig(all_step_config)
             msg += " loaded config from %s" % self.args.config
         else:
             msg += " no config yml file given on command line."
         self.trace(msg)
-        
-        if self.stepImpl is not None:
-            config = self.get_config(name='init')
-            self.stepImpl.init(config=config, pipeline=self)
-
+        return all_step_config
+    
     def run(self, command_line=None):
-        config = self.init(command_line)
-        if self.args.clean:
-            return self.doClean()
+        if not self.initialized:
+            self.all_step_config = self._read_configfile(command_line)
+            # set initialized to true after stepsImpl.init is called
+            
+        init_config = self.get_config(name='init')
+
+        if init_config.clean:
+            self.doClean()
+
+        if init_config.gpu >= 0:
+            with tf.device('/gpu:%d' % init_config.gpu):
+                self.trace("set gpu device to %d" % init_config.gpu)
+                self._run_with_device(init_config)
+        else:
+            self._run_with_device(init_config)
+
+    def _run_with_device(self, init_config):
+        if self.session:
+            self._run_with_session(init_config)
+        else:
+            tfConfig = tf.ConfigProto()
+            if init_config.gpu >=0:
+                tfConfig.gpu_options.allow_growth = True
+                tfConfig.log_device_placement = False
+                tfConfig.allow_soft_placement=True
+            if init_config.cores > 0:
+                tfConfig.inter_op_parallelism_threads = config.cores
+                tfConfig.intra_op_parallelism_threads = config.cores
+            # config.use_per_session_threads=True
+            self.session = tf.InteractiveSession(config=tfConfig)
+            self.trace("created tf session")
+            self._run_with_session(init_config)
+
+    def _run_with_session(self, init_config):
+        if not self.initialized:
+            if self.stepImpl is not None:
+                self.stepImpl.init(config=init_config, pipeline=self)
+            if init_config.job_seed > 0:
+                np.random.seed(init_config.job_seed)
+                random.seed(init_config.job_seed)
+                tf.set_random_seed(init_config.job_seed)
+            self.initialized=True
         
-        msg = "Running Pipeline"
-        self.trace(msg)
+        self.trace("running pipeline steps")
+
         step2h5list = {}
         ran_last_step=True
         for step in self.steps:
@@ -309,7 +343,7 @@ class Pipeline(object):
                 pass
             
         args = self.args
-        config = self.config
+        config = self.all_step_config
         nameConfig = Config()
         
         if not config:

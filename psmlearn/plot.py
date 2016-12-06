@@ -27,14 +27,19 @@ def _imshowImg(plt, img):
         plt_img = img
     plt.imshow(plt_img, interpolation='none', origin='lower')
     
-def compareImages(plt, figH, title_imgA, title_imgB):
+def compareImages(plt, figH, title_imgA, title_imgB, colorbars=False):
     plt.figure(figH)
+    plt.clf()
     plt.subplot(1,2,1)
     titleA, imgA = title_imgA
     titleB, imgB = title_imgB
     _imshowImg(plt, imgA)
+    if colorbars:
+        plt.colorbar()
     plt.title(titleA)
     plt.subplot(1,2,2)
     _imshowImg(plt, imgB)
+    if colorbars:
+        plt.colorbar()
     plt.title(titleB)
     plt.pause(.1)

@@ -90,7 +90,9 @@ class Step(object):
         try:
             self.fn_or_method(**kwargs)
         except Exception, exp:
+            print(">>>>>>>>>>>>>>>>>>>>")
             traceback.print_exc()
+            print("<<<<<<<<<<<<<<<<<<<<")
             for fname in output_files:
                 if os.path.exists(fname):
                     sys.stderr.write("WARNING: step: %s failed, deleting output file: %s\n" % (self, fname))

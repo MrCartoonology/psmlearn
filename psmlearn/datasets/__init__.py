@@ -16,14 +16,19 @@ DATASETS={('xtcav','amo86815_small'):ImgMLearnDataset,
           ('ice_water','cxi25410'):IceWaterDataset,
           ('diffraction','yoon82_amo86615'):ChuckVirusDataset,
           ('accbeam','siqili'):AccBeamVccYagDataset}
-        
-######## interface
-def get_dataset(project, **kwargs):
-    '''Return an object to work with the data for a project/subproject.
-    The projects are the subdirectories to psmlearn directory, and the 
-    subprojects are the subdirectories to the project directories.
-    ''' 
 
+DATASET_GROUPS=list(set([ky[0] for ky in DATASETS]))
+DATASET_GROUPS.sort()
+DATASET_GROUPS=','.join(DATASET_GROUPS)
+
+def get_dataset(project, **kwargs):
+    '''get a psmlearn dataset object corresponding to data in the
+    psmlearn data area. Data is organized by
+    project/subproject under this directory.
+
+    call this function with no arguments for help.
+    '''
+    
     projectDir = dataloc.getProjectDir(project)
     verbose = kwargs.pop('verbose',False)
     subproject = kwargs.pop('subproject','default_subproject')

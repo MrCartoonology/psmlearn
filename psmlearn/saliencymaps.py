@@ -12,6 +12,7 @@ else:
     from tensorflow.python.framework import ops
     from tensorflow.python.ops import gen_nn_ops
 
+# I don't like this one, to remove
 # http://stackoverflow.com/questions/38340791/guided-back-propagation-in-tensor-flow
 def guided_backprop_op(fn, relus, X):
     assert len(relus)>0, "no relus"
@@ -42,6 +43,7 @@ def guided_backprop_op(fn, relus, X):
 #    return tf.zeros(grad.get_shape())
 #    return tf.select(0. < grad, gen_nn_ops._relu_grad(grad, op.outputs[0]), tf.zeros(grad.get_shape()))
 
+# also don't like this -- remove
 class SaliencyMap(object):
     def __init__(self, model):
         self.model = model
@@ -79,4 +81,22 @@ class SaliencyMap(object):
         dimg = dimg[0,:,:,:]
 
         return img_processed, dimg
+
+## new current 
+def gbprop_op(relus, imgs_pl, logits, logits_pl):
+
+    yy = logits
+    grad_ys = logits_pl
+
+    idx = len(relus)-1
+    while idx >= 0:
+        xx = relus[idx]
+        dyy_xx = tf.gradients(ys=yy, xs=xx, grad_ys=grad_ys)[0]
+        grad_ys = tf.nn.relu(dyy_xx)
+        yy = xx
+        idx -= 1
+        
+    gbprop_op = tf.gradients(ys=yy, xs=imgs_pl, grad_ys=grad_ys)[0]
+    return gbprop_op
+    
     

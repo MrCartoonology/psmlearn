@@ -1,5 +1,9 @@
 import numpy as np
-import tensorflow as tf
+import os
+if os.environ.get('MOCK_TENSORFLOW',None):
+    import psmlearn.mock_tensorflow as tf
+else:
+    import tensorflow as tf
 
 def make_dict_from_param_list(paramlist):
     res = {}

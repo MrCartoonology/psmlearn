@@ -8,14 +8,15 @@ from .. import util
 from .xtcav import ImgMLearnDataset
 from .ice_water import IceWaterDataset
 from .diffraction import ChuckVirusDataset
-from .accbeam import AccBeamVccYagDataset
+#from .accbeam import AccBeamVccYagDataset
 
 ###### All datasets #######
 DATASETS={('xtcav','amo86815_small'):ImgMLearnDataset,
           ('xtcav','amo86815_full'):ImgMLearnDataset,
           ('ice_water','cxi25410'):IceWaterDataset,
           ('diffraction','yoon82_amo86615'):ChuckVirusDataset,
-          ('accbeam','siqili'):AccBeamVccYagDataset}
+      }
+#          ('accbeam','siqili'):AccBeamVccYagDataset}
 
 DATASET_GROUPS=list(set([ky[0] for ky in DATASETS]))
 DATASET_GROUPS.sort()

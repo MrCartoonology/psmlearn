@@ -14,7 +14,11 @@ import sys
 import argparse
 import numpy as np
 import h5py
-import tensorflow as tf
+import os
+if os.environ.get('MOCK_TENSORFLOW',None):
+    import psmlearn.mock_tensorflow as tf
+else:
+    import tensorflow as tf
 import logging
 
 import psmlearn.util as util

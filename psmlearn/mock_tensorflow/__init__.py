@@ -47,7 +47,7 @@ def device(*args, **kwargs):
 def reset_default_graph():
     pass
 
-def InteractiveSession():
+def InteractiveSession(*args, **kwarsg):
     return MockObject()
 
 def float32():
@@ -80,5 +80,7 @@ def initialize_variables(*args, **kwargs):
 def _nn(*args, **kwargs):
     return MockObject()
 
+def set_random_seed(*args, **kwargs):
+    return MockObject()
 
 nn = _nn()

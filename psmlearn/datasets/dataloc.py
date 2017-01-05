@@ -69,7 +69,7 @@ def getProjectCalibFile(project, fname):
     return fullfname
 
 def getSubProjectFile(project, subproject, fname):
-    subprojectDir = getSubProjectDir(project)
+    subprojectDir = getSubProjectDir(project, subproject)
     fullfname = os.path.join(subprojectDir, fname)
     assert os.path.exists(fullfname), "File: %s not found" % fullfname
     return fullfname

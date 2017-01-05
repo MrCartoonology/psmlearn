@@ -27,8 +27,8 @@ def _redo_flag_name(name):
 #    return 'do_%s' % name
 
 
-def _addPipelineArgs(parser, outputdir):
-    parser.add_argument('prefix', type=str, help='prefix for filenames')
+def _addPipelineArgs(parser, outputdir, defprefix=None):
+    parser.add_argument('--prefix', type=str, help='prefix for filenames', default=defprefix)
     parser.add_argument('--redoall', action='store_true', help='redo all steps', default=False)
     parser.add_argument('--outputdir', type=str, help='output directory default=%s' % outputdir, default=outputdir)
     parser.add_argument('--dev', action='store_true',help='develop mode, for shortening datasets, load times, etc.')
@@ -54,6 +54,7 @@ class Pipeline(object):
                  epilog='',
                  session=None,
                  plt=None,
+                 defprefix=None,
                  comm=None):
         self.initialized = False
         self.outputdir = outputdir
@@ -62,6 +63,7 @@ class Pipeline(object):
         self.epilog=epilog
         self.session = session
         self.plt = plt
+        self.defprefix = defprefix
         if comm is None: comm = MPI.COMM_WORLD
         self.comm = comm
         self.rank = comm.Get_rank()
@@ -81,7 +83,7 @@ class Pipeline(object):
         if self.world_size > 1:
             self.hdr += ':rnk=%2.2d' % self.rank
         self.parser = argparse.ArgumentParser(add_help=False)
-        _addPipelineArgs(parser=self.parser, outputdir=self.outputdir)
+        _addPipelineArgs(parser=self.parser, outputdir=self.outputdir, defprefix=self.defprefix)
 
     def __del__(self):
         pass
@@ -152,6 +154,27 @@ class Pipeline(object):
                        data_gen_params=None)
 
     def add_step_method(self, name, output_files=[], help=''):
+        '''adds step to pipeline from method of stepImpl.
+
+        Must construct pipeline with stepImpl argument.
+
+        ARGS:
+          name: (str) name of method of the stepImpl argument. Must have the signature:
+                name(self, config, pipeline, step2h5list, output_files)
+
+          output_files: (optional, list of strings) if step produces multiple output
+            files, provide a list of names here. These will be pieces of the complete
+            name.
+
+        With the default output_files, the output file will be 
+
+        prefix_name.h5
+
+        if output_files is given, say it is ['train','test'] the output files will be
+
+        prefix_name_train.h5
+        prefix_name_test.h5
+        '''
         stepImpl=self.stepImpl
         method = getattr(stepImpl, name)
         self._add_step(name=name,

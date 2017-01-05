@@ -10,7 +10,10 @@ import os
 import sys
 import numpy as np
 import random
-import tensorflow as tf
+if os.environ.get('MOCK_TENSORFLOW',None):
+    import psmlearn.mock_tensorflow as tf
+else:
+    import tensorflow as tf
 from scipy.misc import imresize
 from psmlearn.pipeline import Pipeline
 import psmlearn.h5util as h5util

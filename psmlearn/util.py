@@ -142,3 +142,59 @@ def start_signal_window(img, direc, window_len):
     start_max_signal = end_max_signal-window_len
     return start_max_signal
 
+def start_signal_window_batch(img_batch, window_len, direc='vproj', channel_ordering='tf'):
+    assert len(img_batch.shape) == 4
+    assert channel_ordering in ['tf','th']
+    batch_size = img_batch.shape[0]
+    starts = np.zeros(batch_size, dtype=np.int64)
+    for imgIdx in range(batch_size):
+        img = img_batch[imgIdx]
+        if channel_ordering == 'tf':
+            img = np.mean(img, axis=2)
+        elif channel_ordering == 'th':
+            img = np.mean(img, axis=0)
+        starts[imgIdx] = start_signal_window(img, direc, window_len)
+    return starts
+
+def extract_signal_window(start, window_len, img, direc='vproj', channel_ordering='tf'):
+    assert direc in ['vproj','hproj']
+    assert channel_ordering in ['tf','th']
+    if channel_ordering == 'tf' and direc == 'vproj':
+        return img[:,start:(start+window_len),:]
+    if channel_ordering == 'tf' and direc == 'hproj':
+        return img[start:(start+window_len),:,:]
+    if channel_ordering == 'th' and direc == 'vproj':
+        return img[:,:,start:(start+window_len)]
+    if channel_ordering == 'th' and direc == 'hproj':
+        return img[:,start:(start+window_len),:]
+    
+
+def extract_signal_window_batch(starts, img_batch, window_len, direc='vproj', channel_ordering='tf'):
+    assert len(img_batch.shape) == 4
+    assert direc in ['vproj','hproj']
+    assert channel_ordering in ['tf','th']
+
+    if channel_ordering == 'tf':
+        num_channels = img_batch.shape[3]
+        HH,WW = img_batch.shape[1], img_batch.shape[2]
+    else:
+        num_channels = img_batch.shape[1]
+        HH,WW = img_batch.shape[2], img_batch.shape[3]
+    batch_size = img_batch.shape[0]
+
+    if direc == 'vproj':
+        new_batch_shape = [batch_size, HH, window_len]
+    elif direc == 'hproj':
+        new_batch_shape = [batch_size, window_len, WW]
+
+    if channel_ordering == 'tf':
+        new_batch_shape.append(num_channels)
+    else:
+        new_batch_shape.insert(1,num_channels)
+
+    new_batch = np.empty(new_batch_shape, dtype=img_batch.dtype)
+
+    for imgIdx, start in zip(range(batch_size), starts):
+        new_batch[imgIdx] = extract_signal_window(start, window_len, img_batch[imgIdx],
+                                                  direc, channel_ordering)
+    return new_batch

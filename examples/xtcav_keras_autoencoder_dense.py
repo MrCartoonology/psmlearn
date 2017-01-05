@@ -14,6 +14,7 @@ import numpy as np
 import h5py
 from scipy.misc import imresize
 
+#from keras import regularizers
 from keras.models import Sequential
 from keras.layers import Input, Dense
 from keras.layers import Reshape
@@ -54,8 +55,11 @@ class Keras_Autoencoder_Dense(object):
 
         self.input_img = Input(shape=(flattened_num_img_pixels,))
 
-        self.encoded = Dense(self.encoding_dim, 
-                             activation='relu')(self.input_img)
+        # weird, kears example uses 10e-5, but I just get a big blob. There are 5000 pixels in our images,
+        # and only 784 in MNIST? 6.3 times more? Or do I just need to train more?
+        # took out regulizer, got a better loss, 0.5964, but still a big mean like blob
+        self.encoded = Dense(self.encoding_dim, activation='relu')(self.input_img)
+#                             activity_regularizer=regularizers.activity_l1(10e-7))(self.input_img)
         self.decoded = Dense(flattened_num_img_pixels, activation='sigmoid')(self.encoded)
 
         self.autoencoder = Model(input=self.input_img, output=self.decoded)

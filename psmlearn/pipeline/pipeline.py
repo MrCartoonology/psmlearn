@@ -42,7 +42,6 @@ def _addPipelineArgs(parser, outputdir, defprefix=None):
     parser.add_argument('--cores', type=int, help='cores for tensorflow inter/intra ops', default=0)
     parser.add_argument('-c', '--config', type=str, help='config file for steps. a .yml file', default=None)
 
-    
 class Pipeline(object):
     '''base class for pipeline. Provides managements of steps, for re-running, and providing
     previous step output to later steps, and global pipeline reources to the steps
@@ -90,7 +89,15 @@ class Pipeline(object):
 #        if self.session is not None:
 #            self.session.close()
             
-        
+
+    def _step_output_files(self, outputdir, prefix, stepname, output_files):
+        start = os.path.join(outputdir, prefix)
+        if len(output_files)==0:
+            output_suffixes = [stepname + '.h5']
+        else:
+            output_suffixes= [stepname + extra + '.h5' for extra in output_files]
+        return [start + '_' + suffix for suffix in output_suffixes]
+
     def _add_step(self,
                   name,
                   stepImpl,

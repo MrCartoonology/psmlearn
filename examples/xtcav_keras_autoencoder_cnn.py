@@ -23,6 +23,24 @@ from h5batchreader import H5BatchReader, DataSetGroup
 import psmlearn
 from psmlearn.pipeline import Pipeline
 
+##############
+def find_images_to_interpolate(starts, labels):
+    start_median = np.median(starts)
+    similar_starts = np.logical_and(starts > start_median - 0.5, starts < start_median + 0.5)
+    assert np.sum(similar_starts)>0
+
+    nolasing = np.where(np.logical_and(labels == 0, similar_starts))[0]
+    assert len(nolasing)>0
+
+    lasing = np.where(np.logical_and(labels == 1, similar_starts))[0]
+    assert len(lasing)>0
+
+    lasing_idx = lasing[np.random.randint(len(lasing))] 
+    nolasing_idx = nolasing[np.random.randint(len(nolasing))] 
+
+    return nolasing_idx, lasing_idx
+
+###############
 class Keras_Autoencoder_CNN(object):
     def __init__(self, img_H, img_W):
         assert img_H==108
@@ -254,7 +272,7 @@ class MySteps():
             plt.subplot(1,3,2)
             plt.cla()
             plt.imshow(encoded_img, vmin=vmin, vmax=vmax, interpolation='none')
-            plt.title("encoded")
+            plt.title("encoded valid idx=%d" % idx)
 
             plt.subplot(1,3,3)
             plt.cla()
@@ -296,6 +314,113 @@ class MySteps():
         ML.autoencoder.save(output_files[0])
 
             
+    def interpolate(self, cmd, **kwargs):
+        assert cmd in ['interactive', 'files']
+        step2h5list=kwargs.pop('step2h5list')
+        plotFigH=kwargs.pop('plotFigH')
+        config=kwargs.pop('config')
+        pipeline=kwargs.pop('pipeline')
+        if cmd=='interactive':
+            plot=kwargs.pop('plot')
+        elif cmd == 'files':
+            imgprefix=kwargs.pop('imgprefix')
+
+        # get the data that we trained on, as well as new validation data
+        h5train, h5validation, h5test = step2h5list['prep']
+
+        # read in the data to look at it
+        h5 = h5py.File(h5validation,'r')
+        gasdet = h5['gasdet'][:]
+        labels = h5['labels'][:]
+        starts = h5['starts'][:]
+        NN = len(h5['imgs'])
+
+        imgs = np.zeros((NN,108,54,1), dtype=np.float32)
+        imgs[:,4:104,2:52,0] = np.resize(h5['imgs'],(NN, 100, 50))
+        h5.close()
+
+        # read in the model and load the trained weights
+        ML = Keras_Autoencoder_CNN(108,54)
+        trained_model_file = step2h5list['fit'][0]
+        ML.autoencoder.load_weights(trained_model_file)
+
+        encoded_imgs = ML.autoencoder.predict(imgs)
+        plt = pipeline.plt
+        if not plt:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+
+        nolasing_idx, lasing_idx = find_images_to_interpolate(starts, labels)
+
+        img_batch = np.zeros((2,108,54,1), dtype=np.float32)
+        img_batch[0] = imgs[nolasing_idx]
+        img_batch[1] = imgs[lasing_idx]
+
+        encoded = K.get_session().run(ML.encoded, feed_dict={ML.input_img:img_batch})
+        encoded_shape = list(encoded.shape)
+        num_interp = 25
+        encoded_shape[0]=num_interp
+        encoded_batch = np.zeros(encoded_shape, dtype=np.float32)
+        encoded_batch[0]=encoded[0]
+        encoded_batch[num_interp-1]=encoded[1]
+        
+        direc = encoded[1]-encoded[0]
+        for idx in range(1,num_interp-1):
+            delta = (idx/float(num_interp)) * direc
+            encoded_batch[idx] = encoded[0] + delta
+
+        encoded_imgs = K.get_session().run(ML.decoded, feed_dict={ML.encoded:encoded_batch})
+
+        plt.figure(plotFigH, figsize=(11,8))
+        plt.subplot(1,5,1)
+        plt.imshow(img_batch[0,:,:,0], interpolation='none')
+        plt.title("original no lasing")
+
+        plt.subplot(1,5,2)
+        plt.imshow(encoded_imgs[0,:,:,0], interpolation='none')
+        plt.title("orig nolas encoded")
+
+        plt.subplot(1,5,4)
+        plt.imshow(encoded_imgs[num_interp-1,:,:,0], interpolation='none')
+        plt.title("orig las encoded")
+
+        plt.subplot(1,5,5)
+        plt.imshow(img_batch[1,:,:,0], interpolation='none')
+        plt.title("original lasing")
+
+        vmin = np.min(encoded_imgs)
+        vmax = np.max(encoded_imgs)
+
+        img_files = []
+        plt.subplot(1,5,3)
+        for idx in range(1,num_interp-1):
+            encoded_img = encoded_imgs[idx,:,:,0]
+            plt.imshow(encoded_img, vmin=vmin, vmax=vmax, interpolation='none')
+            plt.title("interp %d" % idx)
+            if cmd == 'interactive':
+                if pipeline.stop_plots(): 
+                    break
+            else:
+                plt.pause(.1)
+                img_file = imgprefix + '_%03d.png' % idx
+                plt.savefig(img_file)
+                img_files.append(img_file)
+        return img_files
+
+    def view_interpolate(self, plot, pipeline, plotFigH, config, step2h5list):
+        self.interpolate('interactive', plot=plot, pipeline=pipeline, plotFigH=plotFigH, config=config, step2h5list=step2h5list)
+
+    def interpolate_video(self, config, pipeline, step2h5list, output_files):
+        imgprefix = output_files[0] + '_imgprefix'
+        video_file = output_files[0].replace('.h5','.mp4')
+        img_files = self.interpolate('files', step2h5list=step2h5list, config=config, imgprefix=imgprefix, plotFigH=23, pipeline=pipeline) 
+        # below, my safari mac broswer can read it, but not the linux browsers.
+        cmd = 'ffmpeg -framerate 2 -i ' + imgprefix + '_%03d.png -pix_fmt yuv420p ' + video_file
+        print(cmd)
+        os.system(cmd)
+        h5py.File(output_files[0],'w')
+
 ######################################
 if __name__ == '__main__':
     mysteps = MySteps()
@@ -308,5 +433,7 @@ if __name__ == '__main__':
                              output_files=['_train','_validation', '_test'])
     pipeline.add_step_method(name='fit')
     pipeline.add_step_method_plot(name='view_fit')
+    pipeline.add_step_method_plot(name='view_interpolate')
+    pipeline.add_step_method(name='interpolate_video')
     
     pipeline.run()

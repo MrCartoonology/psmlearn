@@ -17,7 +17,7 @@ from scipy.stats import norm
 
 #from keras import regularizers
 from keras.models import Model
-from keras.layers import Input, Dense, Lambda, Convolution2D
+from keras.layers import Input, Dense, Lambda, Convolution2D, Flatten, Reshape
 from keras.layers import BatchNormalization, MaxPooling2D, UpSampling2D
 from keras import objectives
 import keras.backend as K
@@ -65,12 +65,13 @@ def sampling(args, **kwargs):
 
 ###################
 class Keras_VAE_Dense(object):
+    def dataprep(self, imgs):
+        return imgs
     def __init__(self, imgH, imgW):
         self.batch_size = 100
         self.original_dim = imgH*imgW
         self.latent_dim = 2
         self.intermediate_dim = 256
-        self.nb_epoch = 50
         self.epsilon_std = 1.0
         self.encoding_dim = 32
 
@@ -92,12 +93,115 @@ class Keras_VAE_Dense(object):
 
         self.VAE = Model(self.input_img, self.img_decoded_mean)
 
+        self.encoder = Model(self.input_img, self.z_mean)
+        
+        self.decoder_input = Input(shape=(self.latent_dim,))
+        _h_decoded = self.decoder_h(self.decoder_input)
+        _img_decoded_mean = self.decoder_mean(_h_decoded)
+        self.generator = Model(self.decoder_input, _img_decoded_mean)
+
     def vae_loss(self, x, y):
         xent_loss = self.original_dim * objectives.binary_crossentropy(x,y)
         k1_loss = -0.5 * K.sum( 1 + self.z_log_var - K.square(self.z_mean) - K.exp(self.z_log_var), axis=-1)
         return xent_loss + k1_loss
 
+class Keras_VAE_CNN(object):
+    def dataprep(self, imgs):
+        NN = len(imgs)
+        assert imgs.shape==(NN,5000)
+        X = np.zeros((NN,108,54,1), dtype=imgs.dtype)
+        for idx in range(NN):
+            X[idx,4:104,2:52,0]=imgs[idx].reshape((100,50))
+        return X
     
+    def __init__(self, img_H, img_W):
+        assert img_H == 100
+        assert img_W == 50
+        self.original_dim = 5000
+        img_H += 8
+        img_W += 4
+
+        self.batch_size = 100
+        self.latent_dim = 2
+        self.epsilon_std = 1.0
+
+        self.input_img = Input(batch_shape=(self.batch_size, img_H, img_W, 1))
+
+        x = Convolution2D(16, 3, 3, activation='relu', border_mode='same')(self.input_img)
+        # (108, 54, 16)
+        
+        x = MaxPooling2D((2, 2), border_mode='same')(x)
+        # (54, 27, 16)
+        
+        x = Convolution2D(8, 5, 5, activation='relu', border_mode='same')(x)
+        # (54, 27, 8)
+        
+        x = MaxPooling2D((3, 3), border_mode='same')(x)
+        # (18, 9, 8)
+        
+        x = Convolution2D(4, 7, 5, activation='relu', border_mode='same')(x)
+        # (18, 9, 4 )
+        
+        x = MaxPooling2D((3, 3), border_mode='same')(x)
+        # (6, 3, 4)
+
+        self.hidden = Flatten()(x)
+        
+        self.z_mean = Dense(self.latent_dim)(self.hidden)
+        self.z_log_var = Dense(self.latent_dim)(self.hidden)
+
+        
+        self.z = Lambda(sampling, 
+                        arguments={'batch_size': self.batch_size, 
+                                   'latent_dim': self.latent_dim,
+                                   'epsilon_std': self.epsilon_std}) \
+                                   ([self.z_mean,self.z_log_var])
+
+        self.encoder_layers = []
+        self.encoder_layers.append(Dense(6*3*4, activation='relu'))
+        self.encoder_layers.append(Reshape((6,3,4)))
+        # (6, 3, 4)
+
+        self.encoder_layers.append(Convolution2D(4, 5, 5, activation='relu', border_mode='same'))
+        # (6, 3, 4)
+
+        self.encoder_layers.append(UpSampling2D((3,3)))
+        # (18, 9, 4)
+
+        self.encoder_layers.append(Convolution2D(8,5,5, activation='relu', border_mode='same'))
+        # (18, 9, 8)
+
+        self.encoder_layers.append(UpSampling2D((3,3)))
+        # (54, 27, 8)
+
+        self.encoder_layers.append(Convolution2D(16,3,3, activation='relu', border_mode='same'))
+        # (54, 27, 16)
+
+        self.encoder_layers.append(UpSampling2D((2,2)))
+        # (108,94,16)
+
+        self.encoder_layers.append(Convolution2D(1,3,3, activation='sigmoid', border_mode='same'))
+
+        x = self.z
+        for layer in self.encoder_layers:
+            x = layer(x)
+        self.img_decoded_mean = x
+        self.VAE = Model(self.input_img, self.img_decoded_mean)
+
+        self.encoder = Model(self.input_img, self.z_mean)
+
+        self.decoder_input = Input(shape=(self.latent_dim,))
+        x = self.decoder_input
+        for layer in self.encoder_layers:
+            x = layer(x)
+        self.generator = Model(self.decoder_input, x)
+        
+    def vae_loss(self, x, y):
+        xent_loss = self.original_dim * objectives.binary_crossentropy(Flatten()(x),Flatten()(y))
+        k1_loss = -0.5 * K.sum( 1 + self.z_log_var - K.square(self.z_mean) - K.exp(self.z_log_var), axis=-1)
+        return xent_loss + k1_loss
+
+        
 #################
 class MySteps():
     def __init__(self):
@@ -112,9 +216,14 @@ class MySteps():
                             help='label shot as no lasing if gasdet is below this value, '
                                  'default 0.017, we dont see much lasing at that level',
                             default=0.0017)
+        parser.add_argument('--cnn', action='store_true',
+                            help='use the cnn VAE')
         parser.add_argument('--logthresh', type=float,
                             help='log threshold default=220.0, ',
                             default=220.0)
+        parser.add_argument('--nb', type=int,
+                            help='number of epochs',
+                            default=50),
         parser.add_argument('--sigwin', type=int,
                             help='width of signal window, vproj def 232, ',
                             default=232)
@@ -163,20 +272,28 @@ class MySteps():
         h5 = h5py.File(h5validation,'r')
         validation_imgs = h5['imgs'][:]
 
-        ML = Keras_VAE_Dense(img_H, img_W)
+        if config.cnn:
+            ML = Keras_VAE_CNN(img_H, img_W)
+        else:
+            ML = Keras_VAE_Dense(img_H, img_W)
         ML.VAE.summary()
-        ML.VAE.compile(optimizer='rmsprop', loss=ML.vae_loss)
+        ML.VAE.compile(optimizer='Adam', loss=ML.vae_loss)
 
         # looks like fit will send through the last batch as a partial batches, and we have
         # built VAE to use batches of 100, so cut samples
 
         trainN = len(train_imgs) - (len(train_imgs) % ML.batch_size)
         validN = len(validation_imgs) - (len(validation_imgs) % ML.batch_size)
-        ML.VAE.fit(train_imgs[0:trainN], train_imgs[0:trainN], 
-                   nb_epoch=500,
+        train_imgs = ML.dataprep(train_imgs[0:trainN])
+        validation_imgs = ML.dataprep(validation_imgs[0:validN])
+
+#        import IPython
+#        IPython.embed()
+        ML.VAE.fit(train_imgs, train_imgs,
+                   nb_epoch=config.nb,
                    batch_size=ML.batch_size,
                    shuffle=True,
-                   validation_data=(validation_imgs[0:validN], validation_imgs[0:validN]))
+                   validation_data=(validation_imgs, validation_imgs))
         ML.VAE.save(output_files[0])
 
     ## not a step, called by other plot steps
@@ -189,31 +306,73 @@ class MySteps():
         img_H = h5['config']['reduced_h'].value
 
         # read in the model and load the trained weights
-        ML = Keras_VAE_Dense(img_H, img_W)
+        if config.cnn:
+            ML = Keras_VAE_CNN(img_H, img_W)
+        else:
+            ML = Keras_VAE_Dense(img_H, img_W)
         ML.VAE.load_weights(trained_model_file)
-        
-        imgs = h5['imgs'][0:ML.batch_size]
-        gasdet = h5['gasdet'][0:ML.batch_size]
-        labels = h5['labels'][0:ML.batch_size]
 
-        img_W = h5['config']['reduced_w'].value
+        # read in a multiple of batch_size imgs, labels, etc
+        NN = len(h5['imgs'])
+        NN = NN - (NN % ML.batch_size)
+        imgs = ML.dataprep(h5['imgs'][0:NN])
+        gasdet = h5['gasdet'][0:NN]
+        labels = h5['labels'][0:NN]
         h5.close()
-
-        encoded_imgs = ML.VAE.predict(imgs, batch_size=ML.batch_size)
 
         plt = pipeline.plt
         assert plt
 
+        # latent space plot
+        imgs_encoded = ML.encoder.predict(imgs, batch_size=ML.batch_size)
+        colors = labels.astype(np.float)
+        plt.figure(plotFigH, figsize=(18,10))
+        plt.scatter(x=imgs_encoded[:,0], y=imgs_encoded[:,1], s=80, c=colors, alpha=0.5)
+        plt.title("%d encoded test images, %d nolasing (blue)" % (NN, np.sum(labels==0)))
+        plt.pause(.1)
+
+        # generated images
+        nrows=7
+        ncols=24
+        shape = (img_H, img_W)
+        ZLIM=6
+        grid_x = np.linspace(-ZLIM,ZLIM,ncols)
+        grid_y = np.linspace(-ZLIM,ZLIM,nrows)
+        canvas = np.zeros((nrows*shape[0],ncols*shape[1])) 
+        
+        for col, z0 in enumerate(grid_x):
+            for row, z1 in enumerate(grid_y):
+                z_sample = np.array([[z1,z0]]) * ML.epsilon_std
+                gen_sample = ML.generator.predict(z_sample)
+                if config.cnn:
+                    img_sample = gen_sample[0,4:104,2:52,0]
+                else:
+                    img_sample = gen_sample[0].reshape(img_H, img_W)
+                row_pix = row * shape[0]
+                col_pix = col * shape[1]
+                canvas[row_pix:(row_pix + shape[0]), col_pix:(col_pix + shape[1])] = img_sample
+        plt.figure(plotFigH+1)
+        plt.imshow(canvas, interpolation='none')
+        plt.title('generated images')
+        plt.xlabel('z1 in [-6,6]')
+        plt.ylabel('z0 in [-6,6]')
+        plt.pause(.1)
+
+        # decoded images, compare to originals
+        imgs_decoded = ML.VAE.predict(imgs, batch_size=ML.batch_size)
         idxs= range(len(imgs))
         random.shuffle(idxs)
-        
-        plt.figure()
+        plt.figure(plotFigH+2)
         for idx in idxs:
-            orig_img = np.reshape(imgs[idx],(img_H, img_W))
-            encoded_img = np.reshape(encoded_imgs[idx],(img_H, img_W))
-            diff = orig_img - encoded_img
-            vmin = min(np.min(orig_img), np.min(encoded_img))
-            vmax = max(np.max(orig_img), np.max(encoded_img))
+            if config.cnn:
+                orig_img = imgs[idx,4:104,2:52,0]
+                decoded_img = imgs_decoded[idx,4:104,2:52,0]
+            else:
+                orig_img = np.reshape(imgs[idx],(img_H, img_W))
+                decoded_img = np.reshape(imgs_decoded[idx],(img_H, img_W))
+            diff = orig_img - decoded_img
+            vmin = min(np.min(orig_img), np.min(decoded_img))
+            vmax = max(np.max(orig_img), np.max(decoded_img))
 
             plt.clf()
             plt.subplot(1,3,1)
@@ -223,7 +382,7 @@ class MySteps():
 
             plt.subplot(1,3,2)
             plt.cla()
-            plt.imshow(encoded_img, vmin=vmin, vmax=vmax, interpolation='none')
+            plt.imshow(decoded_img, vmin=vmin, vmax=vmax, interpolation='none')
             plt.title("encoded")
 
             plt.subplot(1,3,3)

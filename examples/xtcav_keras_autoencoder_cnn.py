@@ -42,6 +42,14 @@ def find_images_to_interpolate(starts, labels):
 
 ###############
 class Keras_Autoencoder_CNN(object):
+    def dataprep(self, imgs):
+        NN = len(imgs)
+        assert imgs.shape==(NN,5000)
+        X = np.zeros((NN,108,54,1), dtype=imgs.dtype)
+        for idx in range(NN):
+            X[idx,4:104,2:52,0]=imgs[idx]
+        return X
+    
     def __init__(self, img_H, img_W):
         assert img_H==108
         assert img_W==54

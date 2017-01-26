@@ -37,6 +37,7 @@ def _addPipelineArgs(parser, outputdir, defprefix=None):
     parser.add_argument('--plot', type=int, help='set to 1 or greater to have plot step functions called, they will get this arg', default=0)
     parser.add_argument('--log', type=str, help='one of DEBUG,INFO,WARN,ERROR,CRITICAL.', default='INFO')
     parser.add_argument('--force', action='store_true', help='overwrite existing filenames')
+    parser.add_argument('--nocatch', action='store_true', help="don't catch step exceptions") 
     parser.add_argument('--clean', action='store_true', help='delete all output for this prefix')
     parser.add_argument('--gpu', type=int, help='limit to one gpu on a multi-device system', default=0)
     parser.add_argument('--cores', type=int, help='cores for tensorflow inter/intra ops', default=0)
@@ -290,6 +291,7 @@ class Pipeline(object):
 
         if init_config.clean:
             self.doClean()
+            return
 
         if init_config.gpu >= 0:
             with tf.device('/gpu:%d' % init_config.gpu):
@@ -335,7 +337,7 @@ class Pipeline(object):
                 if self.do_plot_step(ran_last_step, step):
                     msg += " -- running"
                     self.trace(msg)
-                    step.run(step2h5list=step2h5list, output_files=None, plot=self.args.plot)
+                    step.run(step2h5list=step2h5list, output_files=None, plot=self.args.plot, nocatch=self.args.nocatch)
                 else:
                     self.trace(msg + " -- skipping plot step")
             else:
@@ -353,7 +355,7 @@ class Pipeline(object):
                 raise Exception("Some of the output files: %s already exist, use --force to overwrite" % step)
             self.trace("running step=%s" % step.name)
             t0 = time.time()
-            step.run(step2h5list, output_files)
+            step.run(step2h5list, output_files, nocatch=self.args.nocatch)
             step_time = time.time()-t0
             for fname in output_files:
                 assert os.path.exists(fname), "step=%s did not create output file: %s" % (step.name, fname)

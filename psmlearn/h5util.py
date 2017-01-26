@@ -76,3 +76,10 @@ def write_config(h5, config):
             gr[nm]=val
         except:
             gr[nm]=str(val)
+
+
+def save_keras_hist(h5, hist):
+    h5['epoch']=hist.epoch
+    for ky, vals in hist.history.items():
+        h5[ky]=vals
+    

@@ -47,7 +47,7 @@ class Step(object):
             msg += ' output=%s' % ','.join(self.output_suffixes)
         return msg
 
-    def run(self, step2h5list, output_files, plot=0):
+    def run(self, step2h5list, output_files, plot=0, nocatch=False):
         '''a step is called with a signature depending on how it was added. For instance:
         '''
         kwargs = {}
@@ -87,14 +87,18 @@ class Step(object):
             args.remove(nm)
         if self.isMethod():
             assert 'self' in args, "step %s is a method, but argspec=%s doesn't have 'self'" % (self, argspec)
-        try:
+        print("nocatch=%s"%nocatch)
+        if nocatch:
             self.fn_or_method(**kwargs)
-        except Exception, exp:
-            print(">>>>>>>>>>>>>>>>>>>>")
-            traceback.print_exc()
-            print("<<<<<<<<<<<<<<<<<<<<")
-            for fname in output_files:
-                if os.path.exists(fname):
-                    sys.stderr.write("WARNING: step: %s failed, deleting output file: %s\n" % (self, fname))
-                    os.unlink(fname)
-            raise exp
+        else:
+            try:
+                self.fn_or_method(**kwargs)
+            except Exception, exp:
+                print(">>>>>>>>>>>>>>>>>>>>")
+                traceback.print_exc()
+                print("<<<<<<<<<<<<<<<<<<<<")
+                for fname in output_files:
+                    if os.path.exists(fname):
+                        sys.stderr.write("WARNING: step: %s failed, deleting output file: %s\n" % (self, fname))
+                        os.unlink(fname)
+                raise exp

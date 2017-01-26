@@ -1,7 +1,10 @@
+import os
 from setuptools import setup
 
-here = path.abspath(path.dirname(__file__))
-with open(path.join(here,'psmlearn','__init__.py'), encoding='utf-8') as f:
+parentdir = os.path.abspath(os.path.dirname(__file__))
+initpy = os.path.join(parentdir, 'psmlearn', '__init__.py')
+assert os.path.exists(initpy), "couldn't construct init.py, not found: %s" % initpy
+with open(initpy, mode='r') as f:
     version=f.read().split('__version__=')[1].split()[0].strip()
 
 setup(name='psmlearn',

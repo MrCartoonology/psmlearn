@@ -198,3 +198,24 @@ def extract_signal_window_batch(starts, img_batch, window_len, direc='vproj', ch
         new_batch[imgIdx] = extract_signal_window(start, window_len, img_batch[imgIdx],
                                                   direc, channel_ordering)
     return new_batch
+
+### image processing
+def weights_from_edges(img, min_weight=50, max_weight=255):
+    '''returns uint8 weights for image, emphasising edge pixels
+    '''
+    assert len(img.shape) == 2
+    assert min_weight < max_weight
+    assert max_weight <= 255
+    edges = {'horiz':np.zeros_like(img),
+             'vert':np.zeros_like(img)}
+    edges['horiz'][0:-1,:] = np.abs(img[1:,:] - img[0:-1,:])
+    edges['vert'][:,0:-1] = np.abs(img[:,1:] - img[:,0:-1])
+    weights = np.maximum(edges['horiz'], edges['vert'])
+    spread = float(max_weight-min_weight)
+    slope = spread/np.max(weights)
+    weights *= slope
+    weights += float(min_weight)
+    weights = np.minimum(max_weight, np.maximum(0, weights))
+    return weights.astype(np.uint8) 
+    
+    

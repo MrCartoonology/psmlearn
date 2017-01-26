@@ -9,7 +9,7 @@ import random
 import numpy as np
 
 import h5batchreader
-assert h5batchreader.__version__=='v1.0.0', "got version: %s" % h5batchreader.__version__
+assert h5batchreader.__version__=='1.0.0', "got version: %s" % h5batchreader.__version__
 from h5batchreader import H5BatchReader
 
 from . dataset import Dataset

@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-__version__='v0.1.0'
+__version__='0.1.0'
 
 '''
 Machine Learning package for datasets at LCLS/SLAC - photon science (thus the ps in psmlearn)
@@ -32,3 +32,4 @@ from . plot import plotRowsLabelSort
 from . pipeline import Pipeline
 from . tsne import tsne
 from . xvalidate import XValidate
+from . LabelSystem import LabelSystem

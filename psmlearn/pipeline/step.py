@@ -73,8 +73,7 @@ class Step(object):
         kwargs['pipeline'] = self.pipeline
 
         if self.plot:
-            kwargs['plot'] = plot
-            kwargs['plotFigH'] = self.plotFigH
+            kwargs['figh'] = self.plotFigH
         else:
             kwargs['output_files'] = output_files
 

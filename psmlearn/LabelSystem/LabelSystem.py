@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import sys
 import random
+import numpy as np
 
 
 class LabelSystem(object):
@@ -39,3 +40,15 @@ class LabelSystem(object):
             plt.imshow(img)
             num_viewed += 1
             plt.pause(.2)
+
+    def label(self, data_iter, num_to_label=200):
+        next_label = 0
+        for data in data_iter:
+            if next_label == num_to_label:
+                break
+            img = data['img']
+            img_id = data['id']
+            assert isinstance(img_id, str)
+            assert isinstance(img, np.ndarray)
+            print(next_label)
+            next_label += 1
